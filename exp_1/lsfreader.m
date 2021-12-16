@@ -30,6 +30,7 @@ function [data, info] = lsfreader(datafile=(argv{1}))
 % $Revision: 1.1$ fix bugs: 23-Nov-2015
 % $Revision: 1.2$ fix the data length: 12-July-2016 04:40:15
 % write down your codes from here.
+% I had to change some lines to make it work 
 % if nargin < 1
 %     display(['>> help ' mfilename])
 %     eval(['help ' mfilename]);
@@ -122,7 +123,7 @@ info.HorizontalOldPosition = str2num(info.HorizontalOldPosition);
 #disp(info.HorizontalScale);
 #disp(info.HorizontalOldScale);
 #disp(info.HorizontalPosition);
-#disp(info.HorizontalOldPosition);
+disp(info.SamplingPeriod);
 
 endfunction
 endfunction
