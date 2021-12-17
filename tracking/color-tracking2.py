@@ -3,9 +3,10 @@
 import cv2
 import argparse
 import numpy as np
+import math
 
-
-vid_dt = 30
+sz = 0.25
+vid_dt = 10
 real_dt=1/120
 
 def get_arguments():
@@ -19,7 +20,7 @@ def get_arguments():
     if (not args['filter']) or (not args['filter'].upper() in ['RGB', 'HSV']):
         args['filter'] = 'RGB'
     if not args['video']:
-        args['video'] = 'test.mp4'
+        args['video'] = 'test2.mp4'
 
     return args
 
@@ -30,7 +31,7 @@ trackers = []
 def callback(value):
     # create conf
     if trackers:
-        with open('color-traking-conf.txt', 'w') as f:
+        with open('color-tracking-conf.txt', 'w') as f:
             range_filter = get_arguments()['filter'].upper()
             for tracker_bar in trackers:
                 f.write(str(tracker_bar.n)+' ')
@@ -97,6 +98,7 @@ def main():
 
     camera = cv2.VideoCapture(w)
     data_buf = []
+    dual_data_buf=[]
     real_time=0
     
     trackers.append(tracker(0,(10,10), range_filter))
@@ -104,8 +106,10 @@ def main():
     trackers.append(tracker(1,(800,10), range_filter))
 
     s = True
+    nextimage=False
     while True:
-        if s:
+        if s or nextimage:
+            nextimage = False
             if args['video']:
                 ret, image = camera.read()
                 real_time+=real_dt
@@ -113,7 +117,7 @@ def main():
                     print('the end of the file')
                     break
                 
-                k=0.3
+                k=0.5
                 image = cv2.resize(image, (int(1200*k),int(720*k) ), fx=0, fy=0,
                                    interpolation=cv2.INTER_CUBIC)
 
@@ -146,13 +150,18 @@ def main():
         vcnts = cv2.findContours(
             vmask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         # only proceed if at least one contour was found
+        q = 10
         if len(vcnts) > 0:
             c = max(vcnts, key=cv2.contourArea)
             # get rotated rectangle from outer contour
             rotrect = cv2.minAreaRect(c)
             box = cv2.boxPoints(rotrect)
             box = np.int0(box)
-
+            # print(box)
+            l=lambda a,b: (a**2+b**2)**0.5
+            m = max([l(box[x][0]-box[x+1][0],box[x][1]-box[x+1][1]) for x in range(0,3)])
+            # print(m)
+            q = sz / m
             # draw rotated rectangle on copy of img as result
             # result = image.copy()
             cv2.drawContours(image,[box],0,(0,125,0),2)
@@ -173,15 +182,15 @@ def main():
             else:
                 angle = -angle
 
-            print(box)
+            # print(box)
 
             ((x, y), radius) = cv2.minEnclosingCircle(c)
             if 50<radius:
                     # draw the circle and centroid on the frame,
                     # then update the list of tracked points
-                    cv2.circle(image, (int(x), int(y)),
-                               int(radius), (100, 0, 0), 2)
-                    cv2.circle(image, (int(x),int(y)), 3, (0, 0, 0), -1)
+                    # cv2.circle(image, (int(x), int(y)),
+                    #            int(radius), (100, 0, 0), 2)
+                    # cv2.circle(image, (int(x),int(y)), 3, (0, 0, 0), -1)
                     cv2.putText(
                         image, "b", (int(x+10), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 0, 0), 1)
                     cv2.putText(image, "("+str(int(x))+","+str(int(y))+")", (int(x) +
@@ -193,10 +202,29 @@ def main():
             # find the largest contour in the mask, then use
             # it to compute the minimum enclosing circle and
             # centroid
-            c = max(cnts, key=cv2.contourArea)
+            # print(cnts)
+            c_arr = sorted(cnts, key=cv2.contourArea)
+
+            c = c_arr[-1]
             ((x, y), radius) = cv2.minEnclosingCircle(c)
 
-            # idk 
+            c2=c
+            if len(c_arr)>1:
+                c2 = c_arr[-2]
+                if s or nextimage:
+                    ((x2, y2), radius2) = cv2.minEnclosingCircle(c2)
+                    dual_data_buf.append((real_time,(x,y),(x2,y2)))
+                    if len(dual_data_buf) > 1:
+                        a, b = dual_data_buf[-1], dual_data_buf[-2]
+                        w1 = tuple(a[1][x]-b[1][x] for x in range(2))
+                        w2 = tuple(a[2][x]-b[2][x] for x in range(2))
+                        cophi = (w1[0]*w2[0]+w1[1]*w2[1])/((w1[0]**2+w1[1]**2)**0.5*(w2[0]**2+w2[1]**2)**0.5)
+                        phi = max(math.acos(cophi),math.pi-math.acos(scophi))
+
+                        # velocity
+                        print( phi/((a[0]-b[0])*2*math.pi))
+
+            # idk
             # M = cv2.moments(c)
             # center = 0, 0
             # if M["m00"] != 0:
@@ -204,7 +232,14 @@ def main():
 
             # only proceed if the radius meets a minimum size
             if 0<radius < 20:
-                data_buf.append((real_time,x,y))                
+                if s or nextimage:
+                    data_buf.append((real_time,x,y))
+                    if len(data_buf) >1:
+                        a,b=data_buf[-1],data_buf[-2]
+                        # velocity
+                        print(q/(a[0]-b[0])*((a[1]-b[1])**2+(a[2]-b[2])**2)**0.5)
+
+
                 # draw the circle and centroid on the frame,
                 # then update the list of tracked points
                 cv2.circle(image, (int(x), int(y)),
@@ -223,6 +258,10 @@ def main():
         cv2.moveWindow('Mask1', 10,10+380)
         cv2.moveWindow('Mask2', 10+540,10+380)
 
+        for p in data_buf:
+            cv2.circle(image, (int(p[1]), int(p[2])),
+                       1, (50, 0, 0), 2)
+
         for trackbar in trackers:
             trackbar.render()
 
@@ -235,7 +274,10 @@ def main():
                 s = False
             else:
                 s = True
-    print(data_buf)
+        elif k is ord('n'):
+            nextimage=True
+
+    print(dual_data_buf)
 
 if __name__ == '__main__':
     main()
