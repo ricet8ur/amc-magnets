@@ -1,4 +1,3 @@
-# python dynamic_color_tracking.py --filter HSV --webcam
 
 import cv2
 import argparse
@@ -30,7 +29,7 @@ trackers = []
 
 def callback(value):
     # create conf
-    if trackers:
+    if len(trackers)>1:
         with open('color-tracking-conf.txt', 'w') as f:
             range_filter = get_arguments()['filter'].upper()
             for tracker_bar in trackers:
@@ -90,7 +89,7 @@ class tracker:
         back[:, :] = ((v3_min+v3_max)//2, (v2_min+v2_max) //
                       2, (v1_min+v1_max)//2)
         cv2.imshow("Trackbars"+str(self.n),back)
-        
+   
 def main():
     args = get_arguments()
     range_filter = args['filter'].upper()
@@ -117,8 +116,8 @@ def main():
                     print('the end of the file')
                     break
                 
-                k=0.5
-                image = cv2.resize(image, (int(1200*k),int(720*k) ), fx=0, fy=0,
+                rk=0.3
+                image = cv2.resize(image, (int(1200*rk),int(720*rk) ), fx=0, fy=0,
                                    interpolation=cv2.INTER_CUBIC)
 
                 if range_filter == 'RGB':
@@ -143,20 +142,21 @@ def main():
 
         # find contours in the mask and initialize the current
         # (x, y) center of the ball
-        # print(cv2.findContours(mask.copy(),
-            #   cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE))
         cnts = cv2.findContours(
             mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         vcnts = cv2.findContours(
             vmask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
         # only proceed if at least one contour was found
         q = 10
+        vbox=[]
+
         if len(vcnts) > 0:
             c = max(vcnts, key=cv2.contourArea)
             # get rotated rectangle from outer contour
             rotrect = cv2.minAreaRect(c)
             box = cv2.boxPoints(rotrect)
             box = np.int0(box)
+            vbox.append(box)
             # print(box)
             l=lambda a,b: (a**2+b**2)**0.5
             m = max([l(box[x][0]-box[x+1][0],box[x][1]-box[x+1][1]) for x in range(0,3)])
@@ -185,19 +185,20 @@ def main():
             # print(box)
 
             ((x, y), radius) = cv2.minEnclosingCircle(c)
-            if 50<radius:
+            # if 50<radius:
                     # draw the circle and centroid on the frame,
                     # then update the list of tracked points
                     # cv2.circle(image, (int(x), int(y)),
                     #            int(radius), (100, 0, 0), 2)
                     # cv2.circle(image, (int(x),int(y)), 3, (0, 0, 0), -1)
-                    cv2.putText(
-                        image, "b", (int(x+10), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 0, 0), 1)
-                    cv2.putText(image, "("+str(int(x))+","+str(int(y))+")", (int(x) +
-                                10, int(y)+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 0, 0), 1)
+                    # cv2.putText(
+                        # image, "b", (int(x+10), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 0, 0), 1)
+                    # cv2.putText(image, "("+str(int(x))+","+str(int(y))+")", (int(x) +
+                                # 10, int(y)+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 0, 0), 1)
 
+      
         if len(cnts) > 0:
-            # print(cnts[0])
+           # print(cnts[0])
 
             # find the largest contour in the mask, then use
             # it to compute the minimum enclosing circle and
@@ -213,16 +214,17 @@ def main():
                 c2 = c_arr[-2]
                 if s or nextimage:
                     ((x2, y2), radius2) = cv2.minEnclosingCircle(c2)
-                    dual_data_buf.append((real_time,(x,y),(x2,y2)))
-                    if len(dual_data_buf) > 1:
-                        a, b = dual_data_buf[-1], dual_data_buf[-2]
-                        w1 = tuple(a[1][x]-b[1][x] for x in range(2))
-                        w2 = tuple(a[2][x]-b[2][x] for x in range(2))
-                        cophi = (w1[0]*w2[0]+w1[1]*w2[1])/((w1[0]**2+w1[1]**2)**0.5*(w2[0]**2+w2[1]**2)**0.5)
-                        phi = max(math.acos(cophi),math.pi-math.acos(scophi))
-
-                        # velocity
-                        print( phi/((a[0]-b[0])*2*math.pi))
+                    # dual_data_buf.append((real_time,(x,y),(x2,y2)))
+                    data_buf.append((real_time,x2,y2,vbox))
+                    # if len(dual_data_buf) > 1:
+                    #     a, b = dual_data_buf[-1], dual_data_buf[-2]
+                    #     w1 = tuple(a[1][x]-a[2][x] for x in range(2))
+                    #     w2 = tuple(b[1][x]-b[2][x] for x in range(2))
+                    #     if w1!=w2:
+                    #         # print(w1,w2)
+                    #         cophi = (w1[0]*w2[0]+w1[1]*w2[1])/((w1[0]**2+w1[1]**2)**0.5*(w2[0]**2+w2[1]**2)**0.5)
+                    #         phi = max(math.acos(cophi),math.pi-math.acos(cophi))
+                    #         print( phi/((a[0]-b[0])*2*math.pi))
 
             # idk
             # M = cv2.moments(c)
@@ -230,31 +232,34 @@ def main():
             # if M["m00"] != 0:
                 # center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-            # only proceed if the radius meets a minimum size
+            # only proceed if the radius meets a size
             if 0<radius < 20:
                 if s or nextimage:
-                    data_buf.append((real_time,x,y))
+                    data_buf.append((real_time,x,y,vbox))
                     if len(data_buf) >1:
                         a,b=data_buf[-1],data_buf[-2]
                         # velocity
-                        print(q/(a[0]-b[0])*((a[1]-b[1])**2+(a[2]-b[2])**2)**0.5)
+                        # vel = q/(a[0]-b[0])*((a[1]-b[1])**2+(a[2]-b[2])**2)**0.5
+                        # print(vel)
 
 
                 # draw the circle and centroid on the frame,
                 # then update the list of tracked points
+
                 cv2.circle(image, (int(x), int(y)),
                            int(radius), (100, 0, 0), 2)
                 cv2.circle(image, (int(x),int(y)), 3, (0, 0, 0), -1)
-                cv2.putText(
-                    image, "a", (int(x+10), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 0, 0), 1)
-                cv2.putText(image, "("+str(int(x))+","+str(int(y))+")", (int(x) +
-                            10, int(y)+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 0, 0), 1)
+
+                # cv2.putText(
+                    # image, "a", (int(x+10), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 0, 0), 1)
+                # cv2.putText(image, "("+str(int(x))+","+str(int(y))+")", (int(x) +
+                            # 10, int(y)+15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 0, 0), 1)
 
         # show the frame to our screen
         cv2.imshow("Original", image)
         cv2.imshow("Mask1", mask)
         cv2.imshow("Mask2", vmask)
-        cv2.moveWindow('Original', 10+400,10)
+        cv2.moveWindow('Original', 10+400,10+300)
         cv2.moveWindow('Mask1', 10,10+380)
         cv2.moveWindow('Mask2', 10+540,10+380)
 
@@ -277,7 +282,11 @@ def main():
         elif k is ord('n'):
             nextimage=True
 
-    print(dual_data_buf)
+    f=open('tracks/'+'/'.join(args['video'].split('/')[-2:]).replace('.mp4','.txt'),'w')
+    for x in data_buf:
+        f.write(' '.join([str(round(y,3))for y in x[:-1]]))
+        f.write(' '+' '.join([' '.join(' '.join(str(q)for q in p) for p in y)for y in x[-1]]))
+        f.write('\n')
 
 if __name__ == '__main__':
     main()
